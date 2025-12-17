@@ -2,7 +2,6 @@
   "name": "ramdomye",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://your-username.github.io/ramdomye",
   "dependencies": {
     "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/vite": "^4.1.18",
