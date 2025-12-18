@@ -38,6 +38,7 @@ export default function App() {
   const [drawCount, setDrawCount] = useState(1);
   const [finalWinners, setFinalWinners] = useState([]);
   const [showWinnersPanel, setShowWinnersPanel] = useState(false);
+  const [flippedCards, setFlippedCards] = useState([]);
 
   const timer = useRef(null);
 
@@ -98,6 +99,7 @@ export default function App() {
     setRunning(true);
     setCurrent(null);
     setFinalWinners([]);
+    setFlippedCards([]);
 
     const shuffled = [...list].sort(() => 0.5 - Math.random());
     const selectedList = shuffled.slice(0, drawCount);
@@ -141,6 +143,16 @@ export default function App() {
     }, 100);
   };
 
+  const flipCard = (index) => {
+    setFlippedCards(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(i => i !== index);
+      } else {
+        return [...prev, index];
+      }
+    });
+  };
+
   const exportExcel = () => {
     const data = [];
     Object.keys(winners).forEach((p) => {
@@ -163,24 +175,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-700 to-red-600">
       <style>{`
-        /* Ẩn scrollbar nhưng vẫn cho phép scroll */
         .no-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
         
         .no-scrollbar::-webkit-scrollbar {
-          display: none; /* Chrome, Safari, Opera */
+          display: none;
         }
         
-        /* Cho phép scroll tự nhiên */
         html, body, #root {
           height: 100%;
           width: 100%;
           overflow: auto;
         }
         
-        /* Main container scrollable */
         .scrollable-container {
           height: 100vh;
           overflow-y: auto;
@@ -188,7 +197,6 @@ export default function App() {
           -webkit-overflow-scrolling: touch;
         }
         
-        /* Panel scrollable */
         .panel-scrollable {
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
@@ -198,6 +206,7 @@ export default function App() {
           perspective: 1000px;
           width: 100%;
           height: 200px;
+          cursor: pointer;
         }
 
         .flip-card-inner {
@@ -207,7 +216,10 @@ export default function App() {
           text-align: center;
           transition: transform 0.8s;
           transform-style: preserve-3d;
-          animation: flipIn 1s ease forwards;
+        }
+
+        .flip-card.flipped .flip-card-inner {
+          transform: rotateY(180deg);
         }
 
         .flip-card-front, .flip-card-back {
@@ -240,15 +252,6 @@ export default function App() {
           box-shadow: 0 10px 30px rgba(255,215,0,0.2);
           transform: rotateY(180deg);
           color: white;
-        }
-
-        @keyframes flipIn {
-          0% {
-            transform: rotateY(0deg);
-          }
-          100% {
-            transform: rotateY(180deg);
-          }
         }
 
         @keyframes pulse {
@@ -330,7 +333,6 @@ export default function App() {
           />
         )}
 
-        {/* Draw count */}
         {!running && !isFullscreen && (
           <div className="fixed bottom-6 left-6 z-50">
             <div className="glass-effect p-4 rounded-2xl shadow-2xl">
@@ -361,9 +363,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Main content */}
         <div className="min-h-screen flex flex-col py-8">
-          {/* Header */}
           <div className="px-4 text-center mb-8">
             <h1 className="gradient-text font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mb-2">
               🎉 BỐC THĂM TRÚNG THƯỞNG 🎉
@@ -373,7 +373,6 @@ export default function App() {
             </p>
           </div>
 
-          {/* Current Prize Section */}
           <div className="flex-1 flex flex-col items-center justify-start px-4">
             <div className="max-w-6xl w-full mx-auto">
               <div className="text-center mb-8 lg:mb-12">              
@@ -381,7 +380,6 @@ export default function App() {
                   {prize}
                 </h2>
                 
-                {/* Prize selector */}
                 <div className="flex justify-center mb-8">
                   <div className="relative inline-block">
                     <button
@@ -421,7 +419,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* File import */}
                 {!isFullscreen && (
                   <div className="mb-8">
                     <label className="glass-effect px-8 py-4 rounded-xl cursor-pointer hover:bg-white/20 transition-all inline-flex items-center gap-3 text-lg font-semibold group">
@@ -437,7 +434,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Running animation */}
                 {running && current && (
                   <div className="mt-12">
                     <div className="text-4xl font-bold mb-6 text-white/80 flex items-center justify-center gap-3">
@@ -462,7 +458,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Final winners grid */}
                 {!running && finalWinners.length > 0 && (
                   <div className="mt-12 mb-8">
                     <div className="text-3xl font-bold mb-8 text-white/90 flex items-center justify-center gap-3">
@@ -471,18 +466,16 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
                       {finalWinners.map((w, i) => (
-                        <div key={i} className="flip-card">
-                          <div
-                            className="flip-card-inner"
-                            style={{ animationDelay: `${i * 0.2}s` }}
-                          >
+                        <div 
+                          key={i} 
+                          className={`flip-card ${flippedCards.includes(i) ? 'flipped' : ''}`}
+                          onClick={() => flipCard(i)}
+                        >
+                          <div className="flip-card-inner">
                             <div className="flip-card-front">
                               <div className="text-6xl mb-4 animate-bounce">🎁</div>
                               <div className="text-xl font-bold text-white/90">
                                 {prize}
-                              </div>
-                              <div className="text-sm text-white/70 mt-2">
-                                Thí sinh #{i + 1}
                               </div>
                             </div>
                             <div className="flip-card-back">
@@ -496,7 +489,7 @@ export default function App() {
                                 {w.department}
                               </div>
                               <div className="mt-4 text-sm text-white/60">
-                                Chúc mừng! 🎉
+                                Chúc mừng!
                               </div>
                             </div>
                           </div>
@@ -506,7 +499,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Draw button */}
                 <div className="mt-12 lg:mt-16">
                   <button
                     onClick={startDraw}
@@ -547,7 +539,6 @@ export default function App() {
                         onClick={exportExcel}
                         className="glass-effect px-8 py-4 rounded-xl font-semibold hover:bg-white/20 transition-all flex items-center gap-3 mx-auto text-lg"
                       >
-                        <span>📊</span>
                         Xuất báo cáo Excel
                       </button>
                     </div>
@@ -564,7 +555,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Winners panel */}
         {Object.keys(winners).length > 0 && showWinnersPanel && (
           <div className="fixed top-1/2 -translate-y-1/2 right-6 z-40">
             <div className="glass-effect-heavy w-80 h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
@@ -644,7 +634,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Show winners panel button */}
         {Object.keys(winners).length > 0 && !showWinnersPanel && (
           <button
             onClick={() => setShowWinnersPanel(true)}
@@ -656,7 +645,6 @@ export default function App() {
           </button>
         )}
 
-        {/* Mobile toggle button */}
         {Object.keys(winners).length > 0 && (
           <button
             onClick={() => setShowWinnersPanel(!showWinnersPanel)}
