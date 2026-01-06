@@ -36,11 +36,27 @@ export default function App() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [openPrize, setOpenPrize] = useState(false);
   const [drawCount, setDrawCount] = useState(1);
-  const [finalWinners, setFinalWinners] = useState([]);
+  const [currentWinners, setCurrentWinners] = useState([]);
   const [showWinnersPanel, setShowWinnersPanel] = useState(false);
   const [flippedCards, setFlippedCards] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [prevPrize, setPrevPrize] = useState(null);
 
   const timer = useRef(null);
+
+  useEffect(() => {
+    if (prevPrize && prevPrize !== prize && currentWinners.length > 0) {
+      setWinners((prev) => ({
+        ...prev,
+        [prevPrize]: prev[prevPrize]
+          ? [...prev[prevPrize], ...currentWinners]
+          : currentWinners,
+      }));
+      setCurrentWinners([]);
+      setFlippedCards([]);
+    }
+    setPrevPrize(prize);
+  }, [prize, currentWinners, prevPrize]);
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -85,6 +101,64 @@ export default function App() {
     reader.readAsArrayBuffer(file);
   };
 
+  const removeWinner = (prizeName, indexToRemove) => {
+    setWinners((prev) => {
+      const updatedWinners = { ...prev };
+      const winnerToRemove = updatedWinners[prizeName][indexToRemove];
+
+      updatedWinners[prizeName] = updatedWinners[prizeName].filter(
+        (_, index) => index !== indexToRemove
+      );
+
+      if (updatedWinners[prizeName].length === 0) {
+        delete updatedWinners[prizeName];
+      }
+
+      if (ALLOW_REPEAT_PRIZE.includes(prizeName)) {
+        const sheetName = SHEET_MAP[prizeName];
+        setDataBySheet((prevData) => {
+          const updatedData = { ...prevData };
+          if (updatedData[sheetName]) {
+            const exists = updatedData[sheetName].some(
+              (person) => person.lucky === winnerToRemove.lucky
+            );
+
+            if (!exists) {
+              updatedData[sheetName] = [...updatedData[sheetName], winnerToRemove];
+            }
+          }
+          return updatedData;
+        });
+      }
+      return updatedWinners;
+    });
+
+    setShowDeleteConfirm(null);
+  };
+
+  const removeCurrentWinner = (index) => {
+    const winnerToRemove = currentWinners[index];
+
+    setCurrentWinners((prev) => prev.filter((_, i) => i !== index));
+
+    if (ALLOW_REPEAT_PRIZE.includes(prize)) {
+      const sheetName = SHEET_MAP[prize];
+      setDataBySheet((prevData) => {
+        const updatedData = { ...prevData };
+        if (updatedData[sheetName]) {
+          const exists = updatedData[sheetName].some(
+            (person) => person.lucky === winnerToRemove.lucky
+          );
+
+          if (!exists) {
+            updatedData[sheetName] = [...updatedData[sheetName], winnerToRemove];
+          }
+        }
+        return updatedData;
+      });
+    }
+  };
+
   const startDraw = () => {
     if (running) return;
 
@@ -98,8 +172,6 @@ export default function App() {
 
     setRunning(true);
     setCurrent(null);
-    setFinalWinners([]);
-    setFlippedCards([]);
 
     const shuffled = [...list].sort(() => 0.5 - Math.random());
     const selectedList = shuffled.slice(0, drawCount);
@@ -115,15 +187,11 @@ export default function App() {
         clearInterval(timer.current);
         setRunning(false);
 
-        setFinalWinners(selectedList);
-        setCurrent(null);
+        setCurrentWinners((prev) => {
+          return [...prev, ...selectedList];
+        });
 
-        setWinners((prev) => ({
-          ...prev,
-          [prize]: prev[prize]
-            ? [...prev[prize], ...selectedList]
-            : selectedList,
-        }));
+        setCurrent(null);
 
         if (!ALLOW_REPEAT_PRIZE.includes(prize)) {
           setDataBySheet((prev) => {
@@ -154,9 +222,17 @@ export default function App() {
   };
 
   const exportExcel = () => {
+    const allWinners = { ...winners };
+
+    if (currentWinners.length > 0) {
+      allWinners[prize] = allWinners[prize]
+        ? [...allWinners[prize], ...currentWinners]
+        : currentWinners;
+    }
+
     const data = [];
-    Object.keys(winners).forEach((p) => {
-      winners[p].forEach((w) => {
+    Object.keys(allWinners).forEach((p) => {
+      allWinners[p].forEach((w) => {
         data.push({
           Giải: p,
           "Mã số may mắn": w.lucky,
@@ -173,7 +249,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-700 to-red-600">
+    <div
+      className="min-h-screen relative w-full"
+      style={{
+  backgroundImage: "url('/BG2.png')",
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+  backgroundAttachment: 'fixed',
+}}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br"></div>
       <style>{`
         .no-scrollbar {
           -ms-overflow-style: none;
@@ -204,9 +290,10 @@ export default function App() {
 
         .flip-card {
           perspective: 1000px;
-          width: 100%;
-          height: 200px;
+          width: 280px;
+          height: 180px;
           cursor: pointer;
+          transition: all 0.3s ease;
         }
 
         .flip-card-inner {
@@ -233,23 +320,23 @@ export default function App() {
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          padding: 1.5rem;
+          padding: 1rem;
         }
 
         .flip-card-front {
-          background: linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08));
-          backdrop-filter: blur(12px);
-          border: 2px solid rgba(255,255,255,0.25);
-          box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-          font-size: 3rem;
+          background: linear-gradient(145deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15));
+          backdrop-filter: blur(15px);
+          border: 2px solid rgba(255,255,255,0.35);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+          font-size: 2.5rem;
           color: #fbbf24;
         }
 
         .flip-card-back {
-          background: linear-gradient(145deg, rgba(255,215,0,0.2), rgba(255,140,0,0.15));
+          background: linear-gradient(145deg, rgba(255,215,0,0.3), rgba(255,140,0,0.25));
           backdrop-filter: blur(15px);
-          border: 2px solid rgba(255,215,0,0.5);
-          box-shadow: 0 10px 30px rgba(255,215,0,0.2);
+          border: 2px solid rgba(255,215,0,0.6);
+          box-shadow: 0 10px 30px rgba(255,215,0,0.3);
           transform: rotateY(180deg);
           color: white;
         }
@@ -271,47 +358,51 @@ export default function App() {
         
         @media (min-width: 1024px) {
           .flip-card {
-            height: 220px;
+            height: 200px;
+            width: 300px;
+            border-radius: 15px;
           }
           
           .flip-card-front {
-            font-size: 3.5rem;
+            font-size: 3rem;
           }
           
           .flip-card-back {
-            padding: 2rem;
+            padding: 1.5rem;
           }
         }
         
         @media (min-width: 1280px) {
           .flip-card {
-            height: 240px;
+            height: 220px;
+            width: 320px;
           }
           
           .flip-card-front {
-            font-size: 4rem;
+            font-size: 3.5rem;
           }
         }
         
         .glass-effect {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
         }
         
         .glass-effect-heavy {
-          background: rgba(0, 0, 0, 0.7);
+          background: rgba(0, 0, 0, 0.75);
           backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.15);
         }
         
         .gradient-text {
-          background: linear-gradient(90deg, #fbbf24, #f472b6, #fbbf24);
+          background: linear-gradient(90deg, #FF00FF, #FF0000, #FF00FF);
           background-size: 200% auto;
           -webkit-background-clip: text;
           background-clip: text;
           -webkit-text-fill-color: transparent;
           animation: shine 3s linear infinite;
+          text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
         
         @keyframes shine {
@@ -319,9 +410,78 @@ export default function App() {
             background-position: 200% center;
           }
         }
+        
+        .winner-container {
+          min-height: 500px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          width: 100%;
+        }
+        
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .slide-in {
+          animation: slideIn 0.5s ease-out forwards;
+        }
+        
+        /* Grid layout cho 2 hàng */
+        .winner-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 20px;
+          width: 100%;
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        
+        /* Hiển thị theo 2 hàng */
+        @media (min-width: 768px) {
+          .winner-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        
+        /* Hiển thị theo 3 hoặc 4 cột trên màn hình lớn */
+        @media (min-width: 1024px) {
+          .winner-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+        
+        @media (min-width: 1400px) {
+          .winner-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+        }
+        
+        /* Highlight cho card mới nhất */
+        .newest-card {
+          animation: glow 2s ease-in-out infinite;
+          border: 3px solid #fbbf24;
+        }
+        
+        @keyframes glow {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+          }
+          50% {
+            box-shadow: 0 0 40px rgba(251, 191, 36, 0.6);
+          }
+        }
       `}</style>
 
-      <div className="scrollable-container no-scrollbar">
+      <div className="scrollable-container no-scrollbar relative z-10">
         {showConfetti && (
           <Confetti
             width={window.innerWidth}
@@ -333,12 +493,48 @@ export default function App() {
           />
         )}
 
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+            <div className="glass-effect-heavy max-w-md w-full rounded-2xl p-6">
+              <h3 className="text-2xl font-bold text-white mb-4">Xác nhận xóa</h3>
+              <p className="text-white/80 mb-2">
+                Bạn có chắc muốn xóa người trúng thưởng này?
+              </p>
+              <div className="glass-effect p-4 rounded-lg mb-4">
+                <div className="text-yellow-300 font-bold text-lg">
+                  {winners[showDeleteConfirm.prize][showDeleteConfirm.index].name}
+                </div>
+                <div className="text-white/70">
+                  Mã số: {winners[showDeleteConfirm.prize][showDeleteConfirm.index].lucky}
+                </div>
+                <div className="text-white/60 text-sm">
+                  {winners[showDeleteConfirm.prize][showDeleteConfirm.index].department}
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="flex-1 glass-effect px-4 py-3 rounded-lg hover:bg-white/20 transition-colors text-white font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={() => removeWinner(showDeleteConfirm.prize, showDeleteConfirm.index)}
+                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-3 rounded-lg font-semibold transition-all"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!running && !isFullscreen && (
           <div className="fixed bottom-6 left-6 z-50">
             <div className="glass-effect p-4 rounded-2xl shadow-2xl">
-              <label className="text-sm font-medium block mb-2 text-white/90">Số lượng quay</label>
+              <label className="text-sm font-medium block mb-2 text-white/90 ">Số lượng quay</label>
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={() => setDrawCount(prev => Math.max(0, prev - 1))}
                   className="w-8 h-8 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
                 >
@@ -352,7 +548,7 @@ export default function App() {
                   onChange={(e) => setDrawCount(Math.max(0, Number(e.target.value)))}
                   className="w-20 text-center text-black px-3 py-2 rounded-lg font-semibold text-lg bg-white"
                 />
-                <button 
+                <button
                   onClick={() => setDrawCount(prev => Math.min(30, prev + 1))}
                   className="w-8 h-8 flex items-center justify-center bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
                 >
@@ -365,28 +561,24 @@ export default function App() {
 
         <div className="min-h-screen flex flex-col py-8">
           <div className="px-4 text-center mb-8">
-            <h1 className="gradient-text font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mb-2">
+            <h1 className="font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mt-8 drop-shadow-lg text-amber-400">
               🎉 BỐC THĂM TRÚNG THƯỞNG 🎉
             </h1>
-            <p className="text-white/80 text-lg md:text-xl lg:text-2xl font-light">
-              Chương trình tổng kết cuối năm
-            </p>
           </div>
 
           <div className="flex-1 flex flex-col items-center justify-start px-4">
-            <div className="max-w-6xl w-full mx-auto">
-              <div className="text-center mb-8 lg:mb-12">              
-                <h2 className="gradient-text font-black text-3xl md:text-4xl lg:text-5xl xl:text-6xl mb-6 animate-pulse-custom">
+            <div className="max-w-10xl w-full mx-auto h-auto">
+              <div className="text-center mb-8 lg:mb-12">
+                <h2 className="gradient-text h-24 font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mb-6 animate-pulse-custom drop-shadow-lg">
                   {prize}
                 </h2>
-                
-                <div className="flex justify-center mb-8">
+
+                <div className="flex justify-center mb-8 mt-8">
                   <div className="relative inline-block">
                     <button
                       onClick={() => setOpenPrize(!openPrize)}
-                      className="glass-effect px-8 py-4 rounded-xl hover:bg-white/20 transition-all flex items-center gap-3 text-xl font-semibold group"
+                      className="glass-effect px-8 py-4 rounded-xl hover:bg-white/30 transition-all flex items-center gap-3 text-xl font-semibold group shadow-lg"
                     >
-                      <span>🎯</span>
                       {prize}
                       <span className={`transition-transform ${openPrize ? 'rotate-180' : ''}`}>▼</span>
                     </button>
@@ -401,11 +593,10 @@ export default function App() {
                                 setPrize(p);
                                 setOpenPrize(false);
                               }}
-                              className={`px-6 py-4 cursor-pointer hover:bg-white/10 transition-all border-b border-white/10 last:border-b-0 text-lg ${
-                                p === prize
-                                  ? "bg-gradient-to-r from-yellow-500/20 to-pink-500/20 text-yellow-300 font-bold"
-                                  : ""
-                              }`}
+                              className={`px-6 py-4 cursor-pointer hover:bg-white/10 transition-all border-b border-white/10 last:border-b-0 text-lg ${p === prize
+                                ? "bg-gradient-to-r from-yellow-500/30 to-pink-500/30 text-yellow-300 font-bold"
+                                : "text-white"
+                                }`}
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-xl">🏆</span>
@@ -421,7 +612,7 @@ export default function App() {
 
                 {!isFullscreen && (
                   <div className="mb-8">
-                    <label className="glass-effect px-8 py-4 rounded-xl cursor-pointer hover:bg-white/20 transition-all inline-flex items-center gap-3 text-lg font-semibold group">
+                    <label className="glass-effect px-8 py-4 rounded-xl cursor-pointer hover:bg-white/30 transition-all inline-flex items-center gap-3 text-lg font-semibold group shadow-lg">
                       <span className="text-2xl group-hover:scale-110 transition-transform">📁</span>
                       Chọn file Excel
                       <input
@@ -436,20 +627,20 @@ export default function App() {
 
                 {running && current && (
                   <div className="mt-12">
-                    <div className="text-4xl font-bold mb-6 text-white/80 flex items-center justify-center gap-3">
+                    <div className="text-4xl font-bold mb-6 text-white/90 flex items-center justify-center gap-3">
                       <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                       Đang quay...
                     </div>
                     <div className="space-y-6">
-                      <div className="glass-effect p-8 rounded-2xl max-w-2xl mx-auto">
-                        <div className="text-6xl md:text-7xl lg:text-8xl font-black text-yellow-300 mb-4 tracking-wider">
+                      <div className="glass-effect p-8 rounded-2xl max-w-2xl mx-auto border-2 border-yellow-400/50 shadow-2xl">
+                        <div className="text-6xl md:text-7xl lg:text-8xl font-black text-yellow-300 mb-4 tracking-wider drop-shadow-lg">
                           {current.lucky}
                         </div>
-                        <div className="text-3xl md:text-4xl font-bold text-white">
+                        <div className="text-3xl md:text-4xl font-bold text-white drop-shadow">
                           {current.name}
                         </div>
                         {current.department && (
-                          <div className="text-xl text-white/70 mt-3">
+                          <div className="text-xl text-white/80 mt-3 drop-shadow">
                             {current.department}
                           </div>
                         )}
@@ -457,44 +648,56 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                {!running && currentWinners.length > 0 && (
+                  <div className="mt-12 mb-8 mr-80">
+                    <div className="winner-container mb-8 ">
+                      <div className="winner-grid">
+                        {[...currentWinners].reverse().map((winner, reverseIndex) => {
+                          const originalIndex = currentWinners.length - 1 - reverseIndex;
+                          const isNewest = reverseIndex === 0;
 
-                {!running && finalWinners.length > 0 && (
-                  <div className="mt-12 mb-8">
-                    <div className="text-3xl font-bold mb-8 text-white/90 flex items-center justify-center gap-3">
-                      <span>🎊</span>
-                      KẾT QUẢ {prize.toUpperCase()}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
-                      {finalWinners.map((w, i) => (
-                        <div 
-                          key={i} 
-                          className={`flip-card ${flippedCards.includes(i) ? 'flipped' : ''}`}
-                          onClick={() => flipCard(i)}
-                        >
-                          <div className="flip-card-inner">
-                            <div className="flip-card-front">
-                              <div className="text-6xl mb-4 animate-bounce">🎁</div>
-                              <div className="text-xl font-bold text-white/90">
-                                {prize}
+                          return (
+                            <div
+                              key={originalIndex}
+                              className={`flip-card ${flippedCards.includes(originalIndex) ? 'flipped' : ''} ${isNewest ? 'newest-card slide-in' : ''}`}
+                              onClick={() => flipCard(originalIndex)}
+                            >
+                              <div className="flip-card-inner">
+                                <div className="flip-card-front">
+                                  <div className="text-4xl mb-3">🎁</div>
+                                  <div className="text-3xl font-bold text-white/90">
+                                    {prize}
+                                  </div>
+                                </div>
+                                <div className="flip-card-back relative ">
+                                  <div className="text-yellow-300 font-black text-xl mb-2 tracking-wider ">
+                                    {winner.lucky}
+                                  </div>
+                                  <div className="text-white font-bold text-md mb-1">
+                                    {winner.name}
+                                  </div>
+                                  <div className="text-white/80 text-sm">
+                                    {winner.department}
+                                  </div>
+                                  <div className="mt-2 text-xs text-white/60">
+                                    Chúc mừng!
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeCurrentWinner(originalIndex);
+                                    }}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg z-50"
+                                    title="Xóa người không có mặt"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                            <div className="flip-card-back">
-                              <div className="text-yellow-300 font-black text-3xl mb-3 tracking-wider">
-                                {w.lucky}
-                              </div>
-                              <div className="text-white font-bold text-xl mb-2">
-                                {w.name}
-                              </div>
-                              <div className="text-white/80 text-lg">
-                                {w.department}
-                              </div>
-                              <div className="mt-4 text-sm text-white/60">
-                                Chúc mừng!
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -505,10 +708,10 @@ export default function App() {
                     disabled={running || Object.keys(dataBySheet).length === 0}
                     className={`
                       relative overflow-hidden px-16 py-6 rounded-full text-2xl lg:text-3xl font-bold 
-                      transition-all shadow-2xl w-full max-w-md mx-auto
+                      transition-all shadow-2xl w-full max-w-md mx-auto border-2 border-yellow-400/50
                       ${running || Object.keys(dataBySheet).length === 0
-                        ? 'bg-gray-600 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 hover:scale-105 active:scale-95'
+                        ? 'bg-gray-600/80 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 hover:from-green-700 hover:via-emerald-700 hover:to-green-800 hover:scale-105 active:scale-95'
                       }
                     `}
                   >
@@ -519,25 +722,25 @@ export default function App() {
                         <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center gap-3">
+                      <div className="flex items-center justify-center gap-2">
                         <span className="text-3xl">🎲</span>
                         BẮT ĐẦU QUAY
                         <span className="text-3xl">🎲</span>
                       </div>
                     )}
-                    
+
                     {!running && Object.keys(dataBySheet).length > 0 && (
                       <div className="absolute inset-0 -translate-x-full animate-[shine_2s_ease-in-out_infinite]">
-                        <div className="w-1/2 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                        <div className="w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
                       </div>
                     )}
                   </button>
-                  
-                  {!isFullscreen && Object.keys(winners).length > 0 && (
+
+                  {!isFullscreen && (Object.keys(winners).length > 0 || currentWinners.length > 0) && (
                     <div className="mt-6">
                       <button
                         onClick={exportExcel}
-                        className="glass-effect px-8 py-4 rounded-xl font-semibold hover:bg-white/20 transition-all flex items-center gap-3 mx-auto text-lg"
+                        className="glass-effect px-8 py-4 rounded-xl font-semibold hover:bg-white/30 transition-all flex items-center gap-3 mx-auto text-lg shadow-lg"
                       >
                         Xuất báo cáo Excel
                       </button>
@@ -547,17 +750,11 @@ export default function App() {
               </div>
             </div>
           </div>
-
-          {!isFullscreen && (
-            <div className="py-4 text-center text-white/60 text-sm mt-8">
-              <p>Nhấn <kbd className="px-2 py-1 bg-white/20 rounded ml-1">F</kbd> để chế độ toàn màn hình</p>
-            </div>
-          )}
         </div>
 
         {Object.keys(winners).length > 0 && showWinnersPanel && (
           <div className="fixed top-1/2 -translate-y-1/2 right-6 z-40">
-            <div className="glass-effect-heavy w-80 h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="glass-effect-heavy w-80 h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/20">
               <div className="p-6 border-b border-white/10">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-yellow-300 flex items-center gap-3">
@@ -583,7 +780,7 @@ export default function App() {
                 <div className="space-y-4">
                   {Object.keys(winners).map((p) => (
                     <div key={p} className="mb-4 last:mb-0">
-                      <div className="sticky top-0 bg-gradient-to-r from-yellow-500/20 to-pink-500/20 backdrop-blur-sm px-4 py-3 rounded-lg mb-2 z-10">
+                      <div className="sticky top-0 bg-gradient-to-r from-yellow-500/30 to-pink-500/30 backdrop-blur-sm px-4 py-3 rounded-lg mb-2 z-10 border border-white/10">
                         <div className="font-bold text-white flex items-center justify-between">
                           <span>{p}</span>
                           <span className="text-yellow-300 text-sm">
@@ -595,10 +792,10 @@ export default function App() {
                         {winners[p].map((w, i) => (
                           <li
                             key={i}
-                            className="glass-effect px-4 py-3 rounded-lg hover:bg-white/10 transition-all group"
+                            className="glass-effect px-4 py-3 rounded-lg hover:bg-white/10 transition-all group relative border border-white/10"
                           >
                             <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 flex items-center justify-center bg-yellow-500/20 rounded-lg group-hover:bg-yellow-500/30 transition-colors">
+                              <div className="w-8 h-8 flex items-center justify-center bg-yellow-500/30 rounded-lg group-hover:bg-yellow-500/40 transition-colors">
                                 <span className="text-yellow-300 font-bold">{i + 1}</span>
                               </div>
                               <div className="flex-1 min-w-0">
@@ -612,6 +809,16 @@ export default function App() {
                                   {w.department}
                                 </div>
                               </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowDeleteConfirm({ prize: p, index: i });
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-500/30 text-red-300 hover:text-red-200"
+                                title="Xóa người trúng thưởng"
+                              >
+                                ×
+                              </button>
                             </div>
                           </li>
                         ))}
@@ -624,9 +831,9 @@ export default function App() {
               <div className="p-4 border-t border-white/10">
                 <button
                   onClick={exportExcel}
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg"
                 >
-                  <span>📥</span>
+                  <span></span>
                   Xuất Excel
                 </button>
               </div>
@@ -637,7 +844,7 @@ export default function App() {
         {Object.keys(winners).length > 0 && !showWinnersPanel && (
           <button
             onClick={() => setShowWinnersPanel(true)}
-            className="fixed right-6 top-1/2 -translate-y-1/2 z-40 glass-effect p-4 rounded-l-2xl shadow-lg hover:bg-white/20 transition-all group"
+            className="fixed right-6 top-1/2 -translate-y-1/2 z-40 glass-effect p-4 rounded-l-2xl shadow-lg hover:bg-white/30 transition-all group border border-white/20"
           >
             <div className="rotate-90 whitespace-nowrap font-semibold text-yellow-300 group-hover:scale-110 transition-transform">
               🏆 Kết quả
@@ -648,7 +855,7 @@ export default function App() {
         {Object.keys(winners).length > 0 && (
           <button
             onClick={() => setShowWinnersPanel(!showWinnersPanel)}
-            className="fixed bottom-6 right-6 z-50 bg-yellow-500 text-black px-6 py-3 rounded-full font-bold shadow-lg lg:hidden flex items-center gap-2"
+            className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-yellow-500 to-yellow-600 text-black px-6 py-3 rounded-full font-bold shadow-lg lg:hidden flex items-center gap-2 border border-yellow-400/50"
           >
             <span>🏆</span>
             {showWinnersPanel ? "Đóng" : "Kết quả"}
