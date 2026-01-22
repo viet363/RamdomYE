@@ -12,7 +12,25 @@ const PRIZES = [
   "Giải Năm",
   "Giải Khuyến Khích",
 ];
-
+const PRIZE_IMAGES = {
+  "Giải Cống hiến": ["/prizes/cong-hien.png",
+    "/prizes/cong-hien-1.png",
+    "/prizes/cong-hien-2.png",
+    "/prizes/cong-hien-3.png",
+    "/prizes/cong-hien-4.png",
+    "/prizes/cong-hien-5.png",],
+  "Giải Đặc biệt":
+    ["/prizes/giai-dac-biet.png"],
+  "Giải Nhất": ["/prizes/giai-1.png"],
+  "Giải Nhì": ["/prizes/giai-2.png",
+    "/prizes/giai-2-1.png",
+    "/prizes/giai-2-2.png",
+    "/prizes/giai-2-3.png",],
+  "Giải Ba": ["/prizes/giai-3.png"],
+  "Giải Tư": ["/prizes/giai-4.png"],
+  "Giải Năm": ["/prizes/giai-5.png"],
+  "Giải Khuyến Khích": ["/prizes/giai-khuyen-khich.png"],
+};
 const SHEET_MAP = {
   "Giải Cống hiến": "Cống hiến",
   "Giải Đặc biệt": "Giải đặc biệt - Giải nhất",
@@ -41,7 +59,8 @@ export default function App() {
   const [flippedCards, setFlippedCards] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [prevPrize, setPrevPrize] = useState(null);
-
+  const [, setPrizeConfirmedIndex] = useState({});
+  const [prizeImageIndex, setPrizeImageIndex] = useState({});
   const timer = useRef(null);
 
   useEffect(() => {
@@ -52,6 +71,12 @@ export default function App() {
           ? [...prev[prevPrize], ...currentWinners]
           : currentWinners,
       }));
+
+      setPrizeConfirmedIndex(prev => ({
+        ...prev,
+        [prevPrize]: (prev[prevPrize] || 0) + currentWinners.length,
+      }));
+
       setCurrentWinners([]);
       setFlippedCards([]);
     }
@@ -74,6 +99,15 @@ export default function App() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
+
+  const currentPrizeImage = (() => {
+    const images = PRIZE_IMAGES[prize];
+    if (!images || images.length === 0) return null;
+
+    const index = prizeImageIndex[prize] || 0;
+    return images[index % images.length];
+  })();
+
 
   const importExcel = (e) => {
     const file = e.target.files[0];
@@ -164,7 +198,10 @@ export default function App() {
 
     const sheetName = SHEET_MAP[prize];
     const list = dataBySheet[sheetName] || [];
-
+    setPrizeImageIndex(prev => ({
+      ...prev,
+      [prize]: (prev[prize] || 0) + 1,
+    }));
     if (list.length < drawCount) {
       alert("Không đủ số người để quay!");
       return;
@@ -174,7 +211,11 @@ export default function App() {
     setCurrent(null);
 
     const shuffled = [...list].sort(() => 0.5 - Math.random());
-    const selectedList = shuffled.slice(0, drawCount);
+    const baseIndex = (winners[prize]?.length || 0) + currentWinners.length;
+    const selectedList = shuffled.slice(0, drawCount).map((p, i) => ({
+      ...p,
+      prizeTitle: `${prize} ${baseIndex + i + 1}`,
+    }));
 
     let count = 0;
 
@@ -187,6 +228,13 @@ export default function App() {
         clearInterval(timer.current);
         setRunning(false);
 
+        const sheetName = SHEET_MAP[prize];
+        const list = dataBySheet[sheetName] || [];
+
+        if (list.length < drawCount) {
+          alert("Không đủ số người để quay!");
+          return;
+        }
         setCurrentWinners((prev) => {
           return [...prev, ...selectedList];
         });
@@ -252,12 +300,12 @@ export default function App() {
     <div
       className="min-h-screen relative w-full"
       style={{
-  backgroundImage: "url('/BG2.png')",
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundRepeat: 'no-repeat',
-  backgroundAttachment: 'fixed',
-}}
+        backgroundImage: "url('/BG2.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
     >
       <div className="absolute inset-0 bg-gradient-to-br"></div>
       <style>{`
@@ -559,32 +607,38 @@ export default function App() {
           </div>
         )}
 
-        <div className="min-h-screen flex flex-col py-8">
-          <div className="px-4 text-center mb-8">
+        <div className="min-h-screen flex flex-col py-4">
+          <div className="px-4 text-center ">
             <h1 className="font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mt-8 drop-shadow-lg text-amber-400">
-              🎉 BỐC THĂM TRÚNG THƯỞNG 🎉
+              BỐC THĂM TRÚNG THƯỞNG
             </h1>
           </div>
 
           <div className="flex-1 flex flex-col items-center justify-start px-4">
             <div className="max-w-10xl w-full mx-auto h-auto">
-              <div className="text-center mb-8 lg:mb-12">
-                <h2 className="gradient-text h-24 font-black text-4xl md:text-5xl lg:text-6xl xl:text-7xl mb-6 animate-pulse-custom drop-shadow-lg">
+              <div className="text-center  ">
+                <h2 className="gradient-text h-20 text-white text-4xl md:text-5xl lg:text-6xl xl:text-7xl animate-pulse-custom drop-shadow-lg">
                   {prize}
                 </h2>
-
-                <div className="flex justify-center mb-8 mt-8">
+                {currentPrizeImage && (
+                  <div className="flex justify-center ">
+                    <img
+                      src={currentPrizeImage}
+                      alt={prize}
+                      className="h-48 md:h-56 lg:h-64 rounded-2xl shadow-2xl border-4 border-yellow-400/60 transition-all duration-700" />
+                  </div>
+                )}
+                <div className="flex justify-center ">
                   <div className="relative inline-block">
                     <button
                       onClick={() => setOpenPrize(!openPrize)}
-                      className="glass-effect px-8 py-4 rounded-xl hover:bg-white/30 transition-all flex items-center gap-3 text-xl font-semibold group shadow-lg"
-                    >
+                      className="glass-effect px-8 py-2 mt-4 rounded-xl text-white hover:bg-white/30 transition-all flex items-center  text-xl font-semibold group shadow-lg">
                       {prize}
                       <span className={`transition-transform ${openPrize ? 'rotate-180' : ''}`}>▼</span>
                     </button>
 
                     {openPrize && (
-                      <div className="absolute z-50 mt-2 w-80 rounded-2xl glass-effect-heavy shadow-2xl">
+                      <div className="absolute z-50 w-80 rounded-2xl glass-effect-heavy shadow-2xl">
                         <ul className="max-h-96 panel-scrollable no-scrollbar py-2">
                           {PRIZES.map((p) => (
                             <li
@@ -611,7 +665,7 @@ export default function App() {
                 </div>
 
                 {!isFullscreen && (
-                  <div className="mb-8">
+                  <div className=" mt-8">
                     <label className="glass-effect px-8 py-4 rounded-xl cursor-pointer hover:bg-white/30 transition-all inline-flex items-center gap-3 text-lg font-semibold group shadow-lg">
                       <span className="text-2xl group-hover:scale-110 transition-transform">📁</span>
                       Chọn file Excel
@@ -626,7 +680,7 @@ export default function App() {
                 )}
 
                 {running && current && (
-                  <div className="mt-12">
+                  <div className="">
                     <div className="text-4xl font-bold mb-6 text-white/90 flex items-center justify-center gap-3">
                       <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                       Đang quay...
@@ -640,7 +694,7 @@ export default function App() {
                           {current.name}
                         </div>
                         {current.department && (
-                          <div className="text-xl text-white/80 mt-3 drop-shadow">
+                          <div className="text-xl text-white/80  drop-shadow">
                             {current.department}
                           </div>
                         )}
@@ -649,7 +703,7 @@ export default function App() {
                   </div>
                 )}
                 {!running && currentWinners.length > 0 && (
-                  <div className="mt-12 mb-8 mr-80">
+                  <div className=" mb-8 mr-80">
                     <div className="winner-container mb-8 ">
                       <div className="winner-grid">
                         {[...currentWinners].reverse().map((winner, reverseIndex) => {
@@ -666,7 +720,7 @@ export default function App() {
                                 <div className="flip-card-front">
                                   <div className="text-4xl mb-3">🎁</div>
                                   <div className="text-3xl font-bold text-white/90">
-                                    {prize}
+                                    {winner.prizeTitle}
                                   </div>
                                 </div>
                                 <div className="flip-card-back relative ">
@@ -771,7 +825,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <p className="text-white/60 text-sm mt-2">
+                <p className="text-white/60 text-sm">
                   Tổng: {Object.values(winners).flat().length} người trúng thưởng
                 </p>
               </div>
