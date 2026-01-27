@@ -32,11 +32,11 @@ const PRIZE_IMAGES = {
   "Giải Khuyến Khích": ["/prizes/giai-khuyen-khich.png"],
 };
 const SHEET_MAP = {
-  "Giải Cống hiến": "Cống hiến",
-  "Giải Đặc biệt": "Giải đặc biệt - Giải nhất",
-  "Giải Nhất": "Giải đặc biệt - Giải nhất",
-  "Giải Nhì": "Giải ba - Giải nhì",
-  "Giải Ba": "Giải ba - Giải nhì",
+  "Giải Cống hiến": "Giải cống hiến",
+  "Giải Đặc biệt": "Giải Nhất - Giải Đặc Biệt",
+  "Giải Nhất": "Giải Nhất - Giải Đặc Biệt",
+  "Giải Nhì": "Giải Ba - Giải Nhì",
+  "Giải Ba": "Giải Ba - Giải Nhì",
   "Giải Tư": "Giải khuyến khích - Giải Tư",
   "Giải Năm": "Giải khuyến khích - Giải Tư",
   "Giải Khuyến Khích": "Giải khuyến khích - Giải Tư",
